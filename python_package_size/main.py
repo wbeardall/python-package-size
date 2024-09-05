@@ -60,7 +60,7 @@ def measure_sizes(packages):
 def install_package(package, venv_dir):
     pip_path = os.path.join(venv_dir, 'bin', 'pip')
     if isinstance(package, Mapping):
-        cmd = f'{pip_path} install {package['package']} -i {package["index"]}'
+        cmd = f'{pip_path} install {package["package"]} -i {package["index"]}'
     else:
         cmd = f'{pip_path} install {package}'
     print(f'Installing {package}:  {cmd}')
