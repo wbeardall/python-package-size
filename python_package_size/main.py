@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 import os
+import re
 import subprocess
 import tempfile
 import venv
@@ -16,6 +18,7 @@ def main():
     write_csv(package_sizes, args.output)
     print_results(package_sizes)
 
+index_pattern = r'^(-i|--index-url)\s+.+$'
 
 def parse_cli_args():
     parser = argparse.ArgumentParser(description='Measure after-install package size including dependencies.')
@@ -56,7 +59,10 @@ def measure_sizes(packages):
 
 def install_package(package, venv_dir):
     pip_path = os.path.join(venv_dir, 'bin', 'pip')
-    cmd = f'{pip_path} install {package}'
+    if isinstance(package, Mapping):
+        cmd = f'{pip_path} install {package['package']} -i {package["index"]}'
+    else:
+        cmd = f'{pip_path} install {package}'
     print(f'Installing {package}:  {cmd}')
     subprocess.run(cmd, shell=True, text=True, capture_output=True, check=True)
 
@@ -117,12 +123,15 @@ def extract_from_requirements_txt(file) -> list:
     ['astroid==3.0.1']
     """
     dependencies = []
-    for line in file:
-        line = line.strip()
-        if not line or line.startswith('#') or line.startswith('--hash'):
+    lines = [el.strip() for el in file]
+    for i, line in enumerate(file):
+        if not line or line.startswith('#') or line.startswith('-'):
             continue
         dependency = line.split()[0]  # 'package==1.0.0 \' -> ['package==1.0.0', '\']
-        dependencies.append(dependency)
+        if re.match(index_pattern, lines[i-1]):
+            dependencies.append(dict(package=dependency, index=lines[i-1].replace('-i', '').replace('--index-url', '').strip()))
+        else:
+            dependencies.append(dependency)
     return dependencies
 
 
