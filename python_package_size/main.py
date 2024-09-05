@@ -11,6 +11,9 @@ import argparse
 from pip._vendor import tomli as tomllib  # Make compatible with Python 3.8-3.10
 
 
+index_pattern = r'^(-i|--index-url)\s+.+$'
+
+
 def main():
     args = parse_cli_args()
     packages = extract_packages(args.requirements)
@@ -18,7 +21,6 @@ def main():
     write_csv(package_sizes, args.output)
     print_results(package_sizes)
 
-index_pattern = r'^(-i|--index-url)\s+.+$'
 
 def parse_cli_args():
     parser = argparse.ArgumentParser(description='Measure after-install package size including dependencies.')
@@ -40,7 +42,8 @@ def measure_sizes(packages):
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_sizes = []
         for package in packages:
-            package_venv = Path(tmp_dir) / ('venv-' + package)
+            package_name = package if isinstance(package, str) else package['package']
+            package_venv = Path(tmp_dir) / ('venv-' + package_name)
             print(f'Creating new venv {package_venv}')
             venv.create(package_venv, with_pip=True, symlinks=True)
 
@@ -49,9 +52,9 @@ def measure_sizes(packages):
             size_after = get_dir_size(package_venv)
 
             size_diff = size_after - size_before
-            print(f'Size of {package}: {format_size(size_diff)}\n')
+            print(f'Size of {package_name}: {format_size(size_diff)}\n')
 
-            package_sizes.append((size_diff, package))
+            package_sizes.append((size_diff, package_name))
             shutil.rmtree(package_venv)
     package_sizes.sort(reverse=True)
     return package_sizes
@@ -124,12 +127,12 @@ def extract_from_requirements_txt(file) -> list:
     """
     dependencies = []
     lines = [el.strip() for el in file]
-    for i, line in enumerate(file):
+    for i, line in enumerate(lines):
         if not line or line.startswith('#') or line.startswith('-'):
             continue
         dependency = line.split()[0]  # 'package==1.0.0 \' -> ['package==1.0.0', '\']
         if re.match(index_pattern, lines[i-1]):
-            dependencies.append(dict(package=dependency, index=lines[i-1].replace('-i', '').replace('--index-url', '').strip()))
+            dependencies.append(dict(package=dependency, index=lines[i-1].replace('--index-url', '').replace('-i', '').strip()))
         else:
             dependencies.append(dependency)
     return dependencies
